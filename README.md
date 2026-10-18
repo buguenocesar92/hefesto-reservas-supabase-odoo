@@ -10,3 +10,21 @@ Node 24: `node --test tests/*.test.mjs`. El package.json raíz corresponde a Sit
 
 ## Oferta comercial sugerida
 Una instancia privada por negocio, cobrando configuración, carga inicial y soporte mensual. No hay cobro automático de suscripciones. La versión inicial sirve para administración interna; un portal público y roles por profesional requieren desarrollo adicional.
+
+## Despliegue en Coolify (MVP Hefesto)
+Coolify publica el `compose.supabase.yaml` detrás de Traefik, que pone TLS y el dominio. Antes del primer arranque:
+
+1. Crear las tablas ejecutando `supabase/migrations/202610130001_hefesto_taller.sql` en el SQL Editor del proyecto Supabase.
+2. Definir las variables del servicio (las obligatorias fallan si faltan):
+
+| Variable | Obligatoria | Notas |
+| --- | --- | --- |
+| `STORAGE_BACKEND` | recomendada | `supabase` para producción. |
+| `SUPABASE_URL` | sí con Supabase | URL https pública de Supabase, o `http://supabase-kong:8000` si se enruta por la red interna del kit. |
+| `SUPABASE_SECRET_KEY` | sí con Supabase | Clave secreta (`sb_secret_…`). Nunca `sb_publishable_…`. |
+| `WORKSHOP_ID` | no | `main` por defecto; identifica la fila en `hefesto_reservas_states`. |
+| `ADMIN_PASSWORD` | sí | Mínimo 16 caracteres. |
+| `PUBLIC_ORIGIN` | sí | Origen https del sitio (Traefik lo inyecta con el dominio). |
+| `COOKIE_SECURE` | no | `true` por defecto; `false` solo para pruebas locales. |
+
+Si la URL interna `http://supabase-kong:8000` queda detrás del kong de Coolify con un nombre distinto, ajustar la lista de hosts admitidos en `portable/storage.mjs` para incluirlo.
