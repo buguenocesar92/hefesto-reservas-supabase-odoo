@@ -5,7 +5,8 @@
 #  - las variables obligatorias se resuelven con valores ficticios
 #
 # Uso: bash scripts/coolify-check.sh [base_dir] [compose ...]
-# Si no se pasan compose, autodetecta compose*.yaml en la base del repo.
+# Si no se pasan compose, usa solo compose.supabase.yaml (el compose que Coolify
+# publica para esta app), conforme al contrato del plan.
 
 set -euo pipefail
 
@@ -16,10 +17,7 @@ shift || true
 if [ "$#" -gt 0 ]; then
   compose_files=("$@")
 else
-  compose_files=()
-  while IFS= read -r f; do
-    compose_files+=("$f")
-  done < <(find "$base_dir" -maxdepth 2 -name 'compose*.y*ml' | sort)
+  compose_files=("$base_dir/compose.supabase.yaml")
 fi
 
 if [ "${#compose_files[@]}" -eq 0 ]; then
@@ -51,6 +49,7 @@ for compose in "${compose_files[@]}"; do
   fi
 
   compose_name="$(basename "$compose")"
+  fail_before_compose="$fail"
   echo "==> Verificando $compose_name"
 
   # Generar .env con valores ficticios para cada ${VAR} del compose
@@ -143,19 +142,19 @@ PY
     local bad
     bad="$(echo "$body" | jq -r '
       [
-        (has("ports") | select(.)),
-        (has("container_name") | select(.)),
-        (has("privileged") | select(.)),
-        (has("cap_add") | select(.)),
-        (has("devices") | select(.)),
-        ((.network_mode // "") | select(. == "host")),
-        ((.pid // "") | select(. == "host")),
-        ((.ipc // "") | select(. == "host")),
-        ((.security_opt // []) | map(select(. == "unconfined" or endswith(":unconfined"))) | select(. != []))
-      ] | length
+        (has("ports") | select(.) | "ports"),
+        (has("container_name") | select(.) | "container_name"),
+        (has("privileged") | select(.) | "privileged"),
+        (has("cap_add") | select(.) | "cap_add"),
+        (has("devices") | select(.) | "devices"),
+        ((.network_mode // "") | select(. == "host") | "network_mode=host"),
+        ((.pid // "") | select(. == "host") | "pid=host"),
+        ((.ipc // "") | select(. == "host") | "ipc=host"),
+        ((.security_opt // []) | map(select(test("unconfined"))) | select(. != []) | "security_opt=unconfined")
+      ] | map(select(. != null)) | join(",")
     ')"
-    if [ "$bad" != "0" ]; then
-      echo "  FALLA $svc_name: atributos prohibidos en servicio sin profiles (punto 1)" >&2
+    if [ -n "$bad" ]; then
+      echo "  FALLA $svc_name: $bad (punto 1)" >&2
       fail=1
     fi
 
@@ -169,7 +168,7 @@ PY
           if type == "object" then
             (if (.source // "") == "/var/run/docker.sock"
                 then "docker.sock"
-                elif (.source // "") | test("^/") and (.source | startswith($repo) | not)
+                elif (((.source // "") | test("^/")) and (((.source // "") | startswith($repo)) | not))
                 then "fuera del repo: " + .source
                 else empty
                 end)
@@ -204,7 +203,11 @@ PY
     fi
   fi
 
-  echo "    OK"
+  if [ "$fail" -eq "$fail_before_compose" ]; then
+    echo "    OK"
+  else
+    echo "    FALLA $compose_name (ver líneas anteriores)"
+  fi
 done
 
 if [ "$fail" -eq 0 ]; then
