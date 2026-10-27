@@ -30,3 +30,39 @@ Notas operativas adicionales:
 
 - En Coolify, asignar el dominio al servicio `taller` (puerto 3000). `STORAGE_BACKEND` está fijado a `supabase` directamente en `compose.supabase.yaml` y no se configura por variable.
 - Si la URL interna `http://supabase-kong:8000` queda detrás del kong de Coolify con un nombre distinto, ajustar la lista de hosts admitidos en `portable/storage.mjs` para incluirlo.
+
+## Respaldos
+
+El kit produce respaldos con el contrato canonico de Hefesto Studio
+(`docs/CONTRATO-RESPALDO.md`, que vive en `hefesto-monitor-uptime-kuma` y
+`hefesto-respaldo-kopia`).
+
+```bash
+scripts/respaldar.sh --destino /var/backups/hefesto-reservas --datos /data
+scripts/restaurar.sh --respaldo /var/backups/hefesto-reservas/<timestamp> --destino /data-restaurado
+```
+
+El respaldo sale en `<timestamp>/` con `data.tar.gz`, `SHA256SUMS` y
+`manifest.json` (`software`, `version`, `database`, `sha256`, `status`). El
+`.env` **nunca** viaja en claro: solo viajan los nombres de las variables. La
+auditoria queda fuera del repositorio, en
+`$XDG_STATE_HOME/hefesto-respaldo/audit.log`.
+
+## Alcance de la integracion Odoo
+
+Hoy la integracion con Odoo es de **preparacion CSV**
+(`migration/prepare_odoo.py`): exporta el estado del kit a CSV, con su JSON
+completo y su LEEME. No hay cliente Odoo, ni XML-RPC, ni job de sincronizacion,
+ni host de Odoo configurado. El modulo `odoo/` es codigo fuente para instalar a
+mano en una instancia propia del cliente; este kit no la opera ni la despliega.
+
+## Puertas de calidad
+
+| Puerta | Comando |
+| --- | --- |
+| Pruebas | `npm test` |
+| Tipos | `npm run typecheck` |
+| Lint | `npm run lint` |
+| Build portable | `npm run build:portable` |
+| Compose | `npm run check:coolify` |
+| Respaldo | `bats tests/backup_restore.bats` |
